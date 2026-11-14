@@ -7,8 +7,8 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Check, Rocket, Sparkles } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import TagBadge from '../components/TagBadge';
-import { getStartups, saveStartups, getUser, DOMAINS, ROLE_OPTIONS, MARKET_SIZES, FUNDING_TYPES, REVENUE_MODELS } from '../data/mockStartups';
-import { generateId } from '../utils/helpers';
+import { DOMAINS, ROLE_OPTIONS, MARKET_SIZES, FUNDING_TYPES, REVENUE_MODELS } from '../data/mockStartups';
+import { api, getCurrentUser, isLoggedIn } from '../api/client';
 
 const STEPS = [
   { num: 1, title: 'The Idea', desc: 'Tell us about your startup' },
@@ -31,11 +31,12 @@ function convertToEmbed(url) {
 
 export default function SubmitPitch() {
   const navigate = useNavigate();
-  const user = getUser();
+  const user = getCurrentUser() || {};
   const [step, setStep] = useState(1);
   const [errors, setErrors] = useState({});
   const [showSuccess, setShowSuccess] = useState(false);
   const [tagInput, setTagInput] = useState('');
+  const [submitError, setSubmitError] = useState('');
 
   const [form, setForm] = useState({
     title: '', tagline: '', domain: '', problem: '', solution: '', tags: [],
@@ -91,25 +92,35 @@ export default function SubmitPitch() {
   function nextStep() { if (validateStep(step)) setStep(step + 1); }
   function prevStep() { if (step > 1) setStep(step - 1); }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!validateStep(3)) return;
-    const newStartup = {
-      id: generateId(), title: form.title, tagline: form.tagline, domain: form.domain,
+    setSubmitError('');
+
+    if (!isLoggedIn()) {
+      navigate('/login');
+      return;
+    }
+
+    const payload = {
+      title: form.title, tagline: form.tagline, domain: form.domain,
       tags: form.tags, problem: form.problem, solution: form.solution, market: form.market,
       traction: form.traction || 'Early stage — building MVP',
       fundingAsk: parseInt(form.fundingAsk) || 0, fundingType: form.fundingType,
       marketSize: form.marketSize, revenueModel: form.revenueModel || 'Other',
-      votes: 0, views: 0, comments: [], saves: 0, rolesNeeded: form.rolesNeeded,
+      rolesNeeded: form.rolesNeeded,
       founders: [{ name: form.founderName, college: form.college, role: form.founderRole }],
       contactEmail: form.contactEmail,
       demoVideo: form.demoVideo ? convertToEmbed(form.demoVideo) : '',
-      postedAt: new Date().toISOString(), isTrending: false
     };
-    const startups = getStartups();
-    startups.unshift(newStartup);
-    saveStartups(startups);
-    setShowSuccess(true);
-    setTimeout(() => navigate('/explore'), 2500);
+
+    try {
+      await api.createStartup(payload);
+      setShowSuccess(true);
+      setTimeout(() => navigate('/explore'), 2500);
+    } catch (err) {
+      if (err.status === 401) { navigate('/login'); return; }
+      setSubmitError(err.message || 'Could not submit your pitch. Please try again.');
+    }
   }
 
   const progress = ((step - 1) / 2) * 100;
@@ -282,6 +293,12 @@ export default function SubmitPitch() {
               <Field label="Contact Email" error={errors.contactEmail} required>
                 <input type="email" value={form.contactEmail} onChange={e => updateField('contactEmail', e.target.value)} placeholder="you@example.com" className="field-input" />
               </Field>
+            </div>
+          )}
+
+          {submitError && (
+            <div className="mt-6 px-4 py-3 rounded-xl bg-[#EF4444]/5 border border-[#EF4444]/15 text-sm text-[#EF4444]">
+              {submitError}
             </div>
           )}
 

@@ -3,33 +3,35 @@
 // ========================================
 
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowUpRight, Eye, Flame, Bookmark, BookmarkCheck } from 'lucide-react';
 import Avatar from './Avatar';
 import TagBadge from './TagBadge';
 import VoteButton from './VoteButton';
 import { formatFunding, getDomainInfo, timeAgo } from '../utils/helpers';
-import { getUser, saveUser } from '../data/mockStartups';
+import { api, isLoggedIn } from '../api/client';
 
 export default function StartupCard({ startup, compact = false }) {
+  const navigate = useNavigate();
   const domainInfo = getDomainInfo(startup.domain);
-  const [saved, setSaved] = useState(() => {
-    const user = getUser();
-    return user.savedStartups?.includes(startup.id) || false;
-  });
+  const [saved, setSaved] = useState(startup.isSaved || false);
 
-  function handleSave(e) {
+  async function handleSave(e) {
     e.preventDefault();
     e.stopPropagation();
-    const user = getUser();
-    if (saved) {
-      user.savedStartups = (user.savedStartups || []).filter(id => id !== startup.id);
-      setSaved(false);
-    } else {
-      user.savedStartups = [...(user.savedStartups || []), startup.id];
-      setSaved(true);
+    if (!isLoggedIn()) {
+      navigate('/login');
+      return;
     }
-    saveUser(user);
+    const next = !saved;
+    setSaved(next); // optimistic
+    try {
+      const res = await api.toggleSave(startup.id);
+      setSaved(res.saved);
+    } catch (err) {
+      setSaved(!next); // revert
+      if (err.status === 401) navigate('/login');
+    }
   }
 
   return (
@@ -122,7 +124,7 @@ export default function StartupCard({ startup, compact = false }) {
           <span className="flex items-center gap-1 text-xs text-[#9CA3AF]">
             <Eye size={12} /> {startup.views}
           </span>
-          <VoteButton pitchId={startup.id} initialVotes={startup.votes} size="sm" />
+          <VoteButton pitchId={startup.id} initialVotes={startup.votes} initialHasVoted={startup.hasVoted} size="sm" />
         </div>
       </div>
     </Link>

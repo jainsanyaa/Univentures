@@ -103,15 +103,32 @@ A web platform where users can:
 ---
 ##  How to Run the Project
 
+The app has two parts: a **React (Vite) frontend** and an **Express + SQLite backend**.
+Run each in its own terminal.
+
+**1. Backend API** (http://localhost:4000)
+
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/univentures.git
-
-# Go into the project folder
-cd univentures
-
-# Install dependencies
+cd server
 npm install
-
-# Run the app
 npm start
+```
+
+**2. Frontend** (http://localhost:5173)
+
+```bash
+# from the project root (Univentures/)
+npm install
+npm run dev
+```
+
+Then open http://localhost:5173. The Vite dev server proxies `/api` to the backend,
+so no extra configuration is needed. See [`server/README.md`](server/README.md) for the
+full API reference.
+
+**Demo login:** `ayush@univenture.com` / `password123`
+
+### Tech Stack
+
+- **Frontend:** React 19, React Router, Tailwind CSS, Vite
+- **Backend:** Node.js, Express, SQLite (`node:sqlite`), JWT auth, bcrypt

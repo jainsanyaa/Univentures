@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Rocket, ArrowRight, Eye, EyeOff, Mail, Lock, User, GraduationCap, TrendingUp, Lightbulb, DollarSign, Users, Target } from 'lucide-react';
-import { generateId } from '../utils/helpers';
+import { api } from '../api/client';
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -37,7 +37,7 @@ export default function Signup() {
     setStep(2);
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setError('');
 
@@ -51,39 +51,24 @@ export default function Signup() {
     }
 
     setLoading(true);
-
-    setTimeout(() => {
-      const newUser = {
-        id: generateId(),
+    try {
+      await api.signup({
         name: form.name,
         email: form.email,
         password: form.password,
-        role: role === 'student' ? 'Entrepreneur' : 'Investor',
         userType: role,
         college: form.college,
-        bio: form.bio || (role === 'student' ? 'Aspiring entrepreneur ready to build something amazing.' : 'Looking for the next big idea to invest in.'),
+        bio: form.bio,
         firm: form.firm,
         investmentRange: form.investmentRange,
         interests: form.interests,
-        savedStartups: [],
-        votedStartups: [],
-        github: '',
-        linkedin: '',
-        twitter: '',
-      };
-
-      // Save to all users list
-      const users = JSON.parse(localStorage.getItem('uv_all_users') || '[]');
-      users.push(newUser);
-      localStorage.setItem('uv_all_users', JSON.stringify(users));
-
-      // Set as current user
-      localStorage.setItem('uv_user', JSON.stringify(newUser));
-      localStorage.setItem('uv_auth', JSON.stringify({ loggedIn: true, userId: newUser.id, role: role }));
-
+      });
       navigate(role === 'investor' ? '/dashboard' : '/explore');
+    } catch (err) {
+      setError(err.message || 'Could not create your account. Please try again.');
+    } finally {
       setLoading(false);
-    }, 800);
+    }
   }
 
   const DOMAINS = ['AI/ML', 'FinTech', 'HealthTech', 'EdTech', 'E-Commerce', 'CleanTech'];

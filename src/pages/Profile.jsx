@@ -9,7 +9,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import StartupCard from '../components/StartupCard';
 import Avatar from '../components/Avatar';
-import { getUser, getStartups } from '../data/mockStartups';
+import { api, getCurrentUser } from '../api/client';
 
 export default function Profile() {
   const { id } = useParams();
@@ -19,11 +19,22 @@ export default function Profile() {
   const [activeTab, setActiveTab] = useState('pitches');
 
   useEffect(() => {
-    const userData = getUser();
-    setUser(userData);
-    const allStartups = getStartups();
-    setMyPitches(allStartups.filter(s => s.founders.some(f => f.name === userData.name)));
-    setSavedPitches(allStartups.filter(s => (userData.savedStartups || []).includes(s.id)));
+    let active = true;
+    async function load() {
+      try {
+        const userData = await api.getUser(id).catch(() => getCurrentUser());
+        if (!active || !userData) return;
+        setUser(userData);
+        const allStartups = await api.getStartups();
+        if (!active) return;
+        setMyPitches(allStartups.filter(s => s.founders.some(f => f.name === userData.name)));
+        setSavedPitches(allStartups.filter(s => (userData.savedStartups || []).includes(s.id)));
+      } catch {
+        if (active) setUser(getCurrentUser());
+      }
+    }
+    load();
+    return () => { active = false; };
   }, [id]);
 
   if (!user) return (

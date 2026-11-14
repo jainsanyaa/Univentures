@@ -9,7 +9,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import StartupCard from '../components/StartupCard';
 import FilterBar from '../components/FilterBar';
-import { getStartups } from '../data/mockStartups';
+import { api } from '../api/client';
 
 export default function Explore() {
   const [searchParams] = useSearchParams();
@@ -20,7 +20,7 @@ export default function Explore() {
   const [roleFilter, setRoleFilter] = useState('All');
 
   useEffect(() => {
-    setStartups(getStartups());
+    api.getStartups().then(setStartups).catch(() => setStartups([]));
   }, []);
 
   const filtered = startups

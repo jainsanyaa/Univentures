@@ -3,7 +3,7 @@
 // ========================================
 
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   Eye, MessageCircle, Bookmark, BookmarkCheck, Share2, Calendar,
   ArrowLeft, UserPlus, Copy, Check, ExternalLink, FileText, Play, Video, Search
@@ -14,12 +14,14 @@ import StartupCard from '../components/StartupCard';
 import Avatar from '../components/Avatar';
 import VoteButton from '../components/VoteButton';
 import TagBadge from '../components/TagBadge';
-import { getStartups, saveStartups, getUser, saveUser } from '../data/mockStartups';
+import { api, getCurrentUser, isLoggedIn } from '../api/client';
 import { formatFunding, getDomainInfo, timeAgo } from '../utils/helpers';
 
 export default function PitchDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [startup, setStartup] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [related, setRelated] = useState([]);
   const [activeTab, setActiveTab] = useState('pitch');
   const [saved, setSaved] = useState(false);
@@ -28,16 +30,25 @@ export default function PitchDetail() {
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
-    const all = getStartups();
-    const found = all.find(s => s.id === id);
-    if (found) {
-      found.views += 1;
-      saveStartups(all);
-      setStartup({ ...found });
-      const user = getUser();
-      setSaved(user.savedStartups?.includes(id) || false);
-      setRelated(all.filter(s => s.domain === found.domain && s.id !== found.id).slice(0, 3));
+    let active = true;
+    async function load() {
+      try {
+        const found = await api.getStartup(id);
+        if (!active) return;
+        setStartup(found);
+        setSaved(found.isSaved || false);
+        const all = await api.getStartups();
+        if (!active) return;
+        setRelated(all.filter(s => s.domain === found.domain && s.id !== found.id).slice(0, 3));
+      } catch {
+        if (active) setStartup(null);
+      } finally {
+        if (active) setLoading(false);
+      }
     }
+    setLoading(true);
+    load();
+    return () => { active = false; };
   }, [id]);
 
   function showToast(message, type = 'success') {
@@ -45,18 +56,16 @@ export default function PitchDetail() {
     setTimeout(() => setToast(null), 3000);
   }
 
-  function handleSave() {
-    const user = getUser();
-    if (saved) {
-      user.savedStartups = (user.savedStartups || []).filter(sid => sid !== id);
-      setSaved(false);
-      showToast('Removed from saved');
-    } else {
-      user.savedStartups = [...(user.savedStartups || []), id];
-      setSaved(true);
-      showToast('Saved to watchlist');
+  async function handleSave() {
+    if (!isLoggedIn()) { navigate('/login'); return; }
+    try {
+      const res = await api.toggleSave(id);
+      setSaved(res.saved);
+      showToast(res.saved ? 'Saved to watchlist' : 'Removed from saved');
+    } catch (err) {
+      if (err.status === 401) navigate('/login');
+      else showToast('Something went wrong', 'error');
     }
-    saveUser(user);
   }
 
   function handleCopy() {
@@ -66,22 +75,39 @@ export default function PitchDetail() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  function handleAddComment(e) {
+  async function handleAddComment(e) {
     e.preventDefault();
     if (!newComment.trim()) return;
-    const all = getStartups();
-    const idx = all.findIndex(s => s.id === id);
-    if (idx === -1) return;
-    const comment = { id: 'c-' + Date.now(), author: getUser().name, text: newComment, date: new Date().toISOString() };
-    all[idx].comments = [...(all[idx].comments || []), comment];
-    saveStartups(all);
-    setStartup({ ...all[idx] });
-    setNewComment('');
-    showToast('Comment posted');
+    if (!isLoggedIn()) { navigate('/login'); return; }
+    try {
+      const res = await api.addComment(id, newComment.trim());
+      setStartup(prev => ({ ...prev, comments: res.comments }));
+      setNewComment('');
+      showToast('Comment posted');
+    } catch (err) {
+      if (err.status === 401) navigate('/login');
+      else showToast('Could not post comment', 'error');
+    }
   }
 
-  function handleRequestRole(role) {
-    showToast(`Collaboration request sent for ${role}`);
+  async function handleRequestRole(role) {
+    if (!isLoggedIn()) { navigate('/login'); return; }
+    try {
+      await api.applyRole(id, role);
+      showToast(`Collaboration request sent for ${role}`);
+    } catch (err) {
+      if (err.status === 401) navigate('/login');
+      else showToast('Could not send request', 'error');
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFF]">
+        <Navbar />
+        <div className="max-w-7xl mx-auto px-4 pt-24 text-center text-[#6B7280]">Loading…</div>
+      </div>
+    );
   }
 
   if (!startup) {
@@ -284,7 +310,7 @@ export default function PitchDetail() {
                   <div>
                     <form onSubmit={handleAddComment} className="mb-8">
                       <div className="flex gap-3">
-                        <Avatar name={getUser().name} size="md" />
+                        <Avatar name={getCurrentUser()?.name || 'You'} size="md" />
                         <div className="flex-1">
                           <textarea value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Add a comment..." rows={3}
                             className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 text-sm text-[#1A1A2E] placeholder:text-[#6B7280] focus:outline-none focus:border-[#6C63FF]/50 focus:ring-2 focus:ring-[#6C63FF]/10 resize-none" />
@@ -322,7 +348,7 @@ export default function PitchDetail() {
           <aside className="w-full lg:w-80 shrink-0">
             <div className="lg:sticky lg:top-24 space-y-4">
               <div className="rounded-2xl bg-white border border-gray-100/80 p-5" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
-                <VoteButton pitchId={startup.id} initialVotes={startup.votes} size="lg" />
+                <VoteButton pitchId={startup.id} initialVotes={startup.votes} initialHasVoted={startup.hasVoted} size="lg" />
               </div>
 
               <div className="rounded-2xl bg-white border border-gray-100/80 p-5 grid grid-cols-2 gap-4" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>

@@ -5,6 +5,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Rocket, ArrowRight, Eye, EyeOff, Mail, Lock } from 'lucide-react';
+import { api } from '../api/client';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -14,7 +15,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setError('');
 
@@ -24,28 +25,14 @@ export default function Login() {
     }
 
     setLoading(true);
-
-    // Simulate login (check localStorage for user)
-    setTimeout(() => {
-      const users = JSON.parse(localStorage.getItem('uv_all_users') || '[]');
-      const found = users.find(u => u.email === email);
-
-      if (found && found.password === password) {
-        localStorage.setItem('uv_auth', JSON.stringify({ loggedIn: true, userId: found.id, role: found.role }));
-        localStorage.setItem('uv_user', JSON.stringify(found));
-        navigate(found.role === 'investor' ? '/dashboard' : '/explore');
-      } else {
-        // For demo: auto-login the default user
-        const defaultUser = JSON.parse(localStorage.getItem('uv_user'));
-        if (defaultUser && email === defaultUser.email) {
-          localStorage.setItem('uv_auth', JSON.stringify({ loggedIn: true, userId: defaultUser.id, role: 'student' }));
-          navigate('/explore');
-        } else {
-          setError('Invalid email or password. Try signing up first!');
-        }
-      }
+    try {
+      const { user } = await api.login(email.trim(), password);
+      navigate(user.userType === 'investor' ? '/dashboard' : '/explore');
+    } catch (err) {
+      setError(err.message || 'Invalid email or password. Try signing up first!');
+    } finally {
       setLoading(false);
-    }, 800);
+    }
   }
 
   return (

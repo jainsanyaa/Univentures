@@ -9,7 +9,8 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import StartupCard from '../components/StartupCard';
 import Avatar from '../components/Avatar';
-import { getUser, getStartups, saveStartups, getRequests, saveRequests, getActivity } from '../data/mockStartups';
+import { useNavigate } from 'react-router-dom';
+import { api, getCurrentUser, isLoggedIn } from '../api/client';
 
 // Map activity types to icons
 const ACTIVITY_ICONS = {
@@ -21,6 +22,7 @@ const ACTIVITY_ICONS = {
 };
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [startups, setStartups] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -29,11 +31,21 @@ export default function Dashboard() {
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
-    setUser(getUser());
-    setStartups(getStartups());
-    setRequests(getRequests());
-    setActivity(getActivity());
-  }, []);
+    if (!isLoggedIn()) { navigate('/login'); return; }
+    let active = true;
+    setUser(getCurrentUser());
+    Promise.all([
+      api.getStartups().catch(() => []),
+      api.getRequests().catch(() => []),
+      api.getActivity().catch(() => []),
+    ]).then(([s, r, a]) => {
+      if (!active) return;
+      setStartups(s);
+      setRequests(r);
+      setActivity(a);
+    });
+    return () => { active = false; };
+  }, [navigate]);
 
   if (!user) return null;
 
@@ -44,19 +56,26 @@ export default function Dashboard() {
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 3000); }
 
-  function handleDelete(id) {
-    const updated = startups.filter(s => s.id !== id);
-    saveStartups(updated);
-    setStartups(updated);
-    setDeleteConfirm(null);
-    showToast('Startup deleted');
+  async function handleDelete(id) {
+    try {
+      await api.deleteStartup(id);
+      setStartups(prev => prev.filter(s => s.id !== id));
+      setDeleteConfirm(null);
+      showToast('Startup deleted');
+    } catch {
+      setDeleteConfirm(null);
+      showToast('Could not delete startup');
+    }
   }
 
-  function handleRequest(reqId, action) {
-    const updated = requests.map(r => r.id === reqId ? { ...r, status: action } : r);
-    saveRequests(updated);
-    setRequests(updated);
-    showToast(action === 'accepted' ? 'Request accepted' : 'Request declined');
+  async function handleRequest(reqId, action) {
+    try {
+      await api.updateRequest(reqId, action);
+      setRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: action } : r));
+      showToast(action === 'accepted' ? 'Request accepted' : 'Request declined');
+    } catch {
+      showToast('Could not update request');
+    }
   }
 
   const metrics = [

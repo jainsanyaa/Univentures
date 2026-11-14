@@ -9,7 +9,8 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import StartupCard from '../components/StartupCard';
 import StatsBar from '../components/StatsBar';
-import { getStartups, DOMAINS } from '../data/mockStartups';
+import { DOMAINS } from '../data/mockStartups';
+import { api } from '../api/client';
 
 // Hook to detect when elements enter viewport
 function useInView(options = {}) {
@@ -36,7 +37,7 @@ export default function Home() {
   const [ctaRef, ctaVisible] = useInView();
 
   useEffect(() => {
-    setStartups(getStartups());
+    api.getStartups().then(setStartups).catch(() => setStartups([]));
   }, []);
 
   const trendingStartups = startups

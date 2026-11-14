@@ -3,56 +3,53 @@
 // ========================================
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronUp } from 'lucide-react';
-import { getStartups, saveStartups, getUser, saveUser } from '../data/mockStartups';
+import { api, isLoggedIn } from '../api/client';
 
-export default function VoteButton({ pitchId, initialVotes, onVoteChange, size = 'md' }) {
+export default function VoteButton({ pitchId, initialVotes, initialHasVoted = false, onVoteChange, size = 'md' }) {
+  const navigate = useNavigate();
   const [votes, setVotes] = useState(initialVotes);
-  const [hasVoted, setHasVoted] = useState(false);
+  const [hasVoted, setHasVoted] = useState(initialHasVoted);
   const [animating, setAnimating] = useState(false);
   const [particles, setParticles] = useState([]);
 
-  useEffect(() => {
-    const user = getUser();
-    setHasVoted(user.votedStartups?.includes(pitchId) || false);
-  }, [pitchId]);
+  useEffect(() => { setVotes(initialVotes); }, [initialVotes]);
+  useEffect(() => { setHasVoted(initialHasVoted); }, [initialHasVoted]);
 
-  function handleVote(e) {
+  async function handleVote(e) {
     e.preventDefault();
     e.stopPropagation();
 
-    const user = getUser();
-    const startups = getStartups();
-    const idx = startups.findIndex(s => s.id === pitchId);
-    if (idx === -1) return;
+    if (!isLoggedIn()) {
+      navigate('/login');
+      return;
+    }
 
+    const willVote = !hasVoted;
     setAnimating(true);
     setTimeout(() => setAnimating(false), 600);
 
-    if (hasVoted) {
-      startups[idx].votes = Math.max(0, startups[idx].votes - 1);
-      user.votedStartups = (user.votedStartups || []).filter(id => id !== pitchId);
-      setVotes(startups[idx].votes);
-      setHasVoted(false);
-    } else {
-      startups[idx].votes += 1;
-      user.votedStartups = [...(user.votedStartups || []), pitchId];
-      setVotes(startups[idx].votes);
-      setHasVoted(true);
+    if (willVote) {
       // Spawn particles on upvote
       const newParticles = Array.from({ length: 4 }, (_, i) => ({
         id: Date.now() + i,
         x: (Math.random() - 0.5) * 50,
         y: -(Math.random() * 30 + 10),
-        text: ['+1', '+1', '+1', '+1'][i]
+        text: '+1'
       }));
       setParticles(newParticles);
       setTimeout(() => setParticles([]), 700);
     }
 
-    saveStartups(startups);
-    saveUser(user);
-    if (onVoteChange) onVoteChange(startups[idx].votes);
+    try {
+      const res = await api.toggleVote(pitchId);
+      setVotes(res.votes);
+      setHasVoted(res.hasVoted);
+      if (onVoteChange) onVoteChange(res.votes);
+    } catch (err) {
+      if (err.status === 401) navigate('/login');
+    }
   }
 
   const sizeClasses = {

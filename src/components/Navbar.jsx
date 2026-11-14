@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, Rocket, LogOut } from 'lucide-react';
+import { isLoggedIn, getCurrentUser, logout } from '../api/client';
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -23,15 +24,15 @@ export default function Navbar() {
 
   useEffect(() => {
     setMenuOpen(false);
-    // Check auth state on each navigation
-    const authData = localStorage.getItem('uv_auth');
-    setAuth(authData ? JSON.parse(authData) : null);
+    // Re-read auth state on each navigation
+    setAuth(isLoggedIn() ? getCurrentUser() : null);
   }, [location]);
 
-  const isLoggedIn = auth?.loggedIn;
+  const loggedIn = !!auth;
+  const profilePath = `/profile/${auth?.id || 'user-001'}`;
 
   function handleLogout() {
-    localStorage.removeItem('uv_auth');
+    logout();
     setAuth(null);
     navigate('/');
   }
@@ -86,10 +87,10 @@ export default function Navbar() {
 
           {/* Right Side - Auth Buttons */}
           <div className="hidden md:flex items-center gap-3">
-            {isLoggedIn ? (
+            {loggedIn ? (
               <>
                 <Link
-                  to="/profile/user-001"
+                  to={profilePath}
                   className="px-4 py-2 rounded-xl text-sm font-medium border border-[#6C63FF]/25 text-[#6C63FF] hover:bg-[#6C63FF]/[0.04] hover:border-[#6C63FF]/40 transition-all duration-200"
                 >
                   My Profile
@@ -150,10 +151,10 @@ export default function Navbar() {
           ))}
 
           <div className="pt-2 border-t border-gray-100 mt-2 space-y-1">
-            {isLoggedIn ? (
+            {loggedIn ? (
               <>
                 <Link
-                  to="/profile/user-001"
+                  to={profilePath}
                   className="block px-4 py-3 rounded-xl text-sm font-medium text-[#6C63FF] hover:bg-[#6C63FF]/[0.04] transition-colors"
                 >
                   My Profile
