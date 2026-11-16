@@ -7,7 +7,7 @@ import { config } from './config.js';
 import { findUserById } from './db.js';
 
 export function signToken(user) {
-  return jwt.sign({ sub: user.id }, config.jwtSecret, { expiresIn: config.tokenExpiry });
+  return jwt.sign({ sub: user._id || user.id }, config.jwtSecret, { expiresIn: config.tokenExpiry });
 }
 
 function readToken(req) {
@@ -20,28 +20,30 @@ function readToken(req) {
 export function requireAuth(req, res, next) {
   const token = readToken(req);
   if (!token) return res.status(401).json({ error: 'Authentication required' });
-  try {
-    const payload = jwt.verify(token, config.jwtSecret);
-    const user = findUserById(payload.sub);
-    if (!user) return res.status(401).json({ error: 'Invalid session' });
-    req.user = user;
-    req.userId = user.id;
-    next();
-  } catch {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
+  jwt.verify(token, config.jwtSecret, async (err, payload) => {
+    if (err) return res.status(401).json({ error: 'Invalid or expired token' });
+    try {
+      const user = await findUserById(payload.sub);
+      if (!user) return res.status(401).json({ error: 'Invalid session' });
+      req.user = user;
+      req.userId = user._id;
+      next();
+    } catch (e) {
+      next(e);
+    }
+  });
 }
 
 // Attaches req.user / req.userId when present, but never blocks the request.
-export function optionalAuth(req, _res, next) {
+export async function optionalAuth(req, _res, next) {
   const token = readToken(req);
   if (token) {
     try {
       const payload = jwt.verify(token, config.jwtSecret);
-      const user = findUserById(payload.sub);
+      const user = await findUserById(payload.sub);
       if (user) {
         req.user = user;
-        req.userId = user.id;
+        req.userId = user._id;
       }
     } catch {
       // Ignore bad tokens for optional routes.
