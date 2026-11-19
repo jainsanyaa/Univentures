@@ -1,10 +1,3 @@
-// ========================================
-// db.js — MongoDB persistence layer (Mongoose)
-//
-// Exposes small repository helpers that return data already shaped the way
-// the frontend expects (string ids, embedded comments/founders, per-user
-// flags). All helpers are async — MongoDB access is asynchronous.
-// ========================================
 
 import mongoose from 'mongoose';
 import { randomUUID } from 'node:crypto';
@@ -12,10 +5,7 @@ import bcrypt from 'bcryptjs';
 import { config } from './config.js';
 import { User, Startup, Request, Activity } from './models.js';
 import { DEMO_USER, STARTUPS, REQUESTS, ACTIVITY } from './seedData.js';
-
 let connected = false;
-
-// Open (or reuse) the connection and seed the database if it is empty.
 export async function connectDB() {
   if (connected) return mongoose.connection;
   await mongoose.connect(config.mongoUri, { dbName: config.dbName });
@@ -23,18 +13,13 @@ export async function connectDB() {
   await seedIfEmpty();
   return mongoose.connection;
 }
-
-// ---------- Seeding ----------
-
 export async function seedIfEmpty() {
   const count = await User.countDocuments();
   if (count > 0) return false;
   await runSeed();
   return true;
 }
-
 export async function runSeed() {
-  // Demo user
   await User.create({
     _id: DEMO_USER.id,
     name: DEMO_USER.name,
@@ -51,10 +36,8 @@ export async function runSeed() {
     linkedin: DEMO_USER.linkedin,
     twitter: DEMO_USER.twitter,
   });
-
   const votedSet = new Set(DEMO_USER.votedStartups || []);
   const savedSet = new Set(DEMO_USER.savedStartups || []);
-
   const docs = STARTUPS.map(s => ({
     _id: s.id,
     ownerId: null,
@@ -82,12 +65,10 @@ export async function runSeed() {
     demoVideo: s.demoVideo || '',
     postedAt: s.postedAt,
     isTrending: !!s.isTrending,
-    // Seed the demo user's votes/saves so the UI matches the original mock state.
     voters: votedSet.has(s.id) ? [DEMO_USER.id] : [],
     savers: savedSet.has(s.id) ? [DEMO_USER.id] : [],
   }));
   await Startup.insertMany(docs);
-
   await Request.insertMany(
     REQUESTS.map(r => ({
       _id: r.id,
@@ -101,15 +82,12 @@ export async function runSeed() {
       date: r.date,
     }))
   );
-
   await Activity.insertMany(
     ACTIVITY.map(a => ({
       _id: a.id, type: a.type, text: a.text, time: a.time, icon: a.icon, userId: DEMO_USER.id,
     }))
   );
 }
-
-// Wipe every collection (used by `npm run seed --force`).
 export async function clearAll() {
   await Promise.all([
     User.deleteMany({}),
@@ -118,9 +96,6 @@ export async function clearAll() {
     Activity.deleteMany({}),
   ]);
 }
-
-// ---------- Mappers ----------
-
 export async function publicUser(user) {
   if (!user) return null;
   // Derive saved/voted startup ids from array membership on the startups.
@@ -146,7 +121,6 @@ export async function publicUser(user) {
     votedStartups: voted.map(s => s._id),
   };
 }
-
 function mapStartup(doc, userId) {
   if (!doc) return null;
   return {
@@ -211,31 +185,14 @@ export async function createUser(data) {
   });
   return doc.toObject();
 }
-
 export function verifyPassword(userRow, password) {
   return bcrypt.compareSync(password, userRow.passwordHash);
 }
-
-// ---------- Startups ----------
-
-// ---------- Query helpers (filter / sort / projection) ----------
-
 const splitCsv = (v) => String(v).split(',').map(s => s.trim()).filter(Boolean);
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-// Build a MongoDB filter document from HTTP query params. Each branch below
-// maps to a specific operator category from the syllabus:
-//   - comparison:  $eq, $in, $gte, $lte
-//   - logical:     $and (wrapping the branches), $or (text search)
-//   - array:       membership, $all, $elemMatch on arrays of embedded docs
-//   - nested:      dot-notation on embedded sub-documents
 export function buildStartupFilter(params = {}) {
   const and = [];
-
-  // $eq — exact match on a single domain.
   if (params.domain) and.push({ domain: { $eq: params.domain } });
-
-  // $in — match any of several domains (?domains=EdTech,FinTech).
   if (params.domains) and.push({ domain: { $in: splitCsv(params.domains) } });
 
   // Array query — tags is a string array. $in = has any tag; $all = has all tags.
@@ -477,9 +434,6 @@ function mapRequest(row) {
     date: row.date,
   };
 }
-
-// ---------- Activity ----------
-
 export async function listActivity() {
   const rows = await Activity.find({}).lean();
   return rows.map(a => ({ id: a._id, type: a.type, text: a.text, time: a.time, icon: a.icon }));
